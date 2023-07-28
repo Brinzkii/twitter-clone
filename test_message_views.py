@@ -7,7 +7,7 @@
 
 import os
 from unittest import TestCase
-
+from flask_sqlalchemy import SQLAlchemy
 from models import db, connect_db, Message, User
 
 # BEFORE we import our app, let's set an environmental variable
@@ -40,19 +40,22 @@ class MessageViewTestCase(TestCase):
     def setUp(self):
         """Create test client, add sample data."""
 
-        User.query.delete()
-        Message.query.delete()
+        with app.app_context():
+            db.session.expire_on_commit = False
+            User.query.delete()
+            Message.query.delete()
 
-        self.client = app.test_client()
+            self.client = app.test_client()
 
-        self.testuser = User.signup(
-            username="testuser",
-            email="test@test.com",
-            password="testuser",
-            image_url=None,
-        )
+            self.test_user = User(
+                username="testuser",
+                email="test@test.com",
+                password="testuser",
+                image_url=None,
+            )
 
-        db.session.commit()
+            db.session.add(self.test_user)
+            db.session.commit()
 
     def test_add_message(self):
         """Can use add a message?"""
@@ -62,7 +65,7 @@ class MessageViewTestCase(TestCase):
 
         with self.client as c:
             with c.session_transaction() as sess:
-                sess[CURR_USER_KEY] = self.testuser.id
+                sess[CURR_USER_KEY] = self.test_user.id
 
             # Now, that session setting is saved, so we can have
             # the rest of ours test
@@ -74,3 +77,39 @@ class MessageViewTestCase(TestCase):
 
             msg = Message.query.one()
             self.assertEqual(msg.text, "Hello")
+
+    def test_show_message(self):
+        """Test route for showing message"""
+
+        with self.client as c:
+            with c.session_transaction() as sess:
+                sess[CURR_USER_KEY] = self.test_user.id
+
+            c.post("/messages/new", data={"text": "Hello"})
+
+            msg = Message.query.one()
+
+            resp = c.get(f"/messages/{msg.id}")
+            html = resp.get_data(as_text=True)
+
+            self.assertEqual(resp.status_code, 200)
+            self.assertIn("@testuser", html)
+            self.assertIn("Hello", html)
+
+    def test_delete_message(self):
+        """Test route for deleting a message"""
+
+        with self.client as c:
+            with c.session_transaction() as sess:
+                sess[CURR_USER_KEY] = self.test_user.id
+
+            c.post("/messages/new", data={"text": "Hello"})
+
+            msg = Message.query.one()
+
+            resp = c.post(f"/messages/{msg.id}/delete")
+
+            msg = Message.query.first()
+
+            self.assertEqual(resp.status_code, 302)
+            self.assertEqual(msg, None)
