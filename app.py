@@ -5,7 +5,7 @@ from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
 
 from forms import UserAddForm, UserEditForm, LoginForm, MessageForm
-from models import db, connect_db, User, Message
+from models import db, connect_db, User, Message, Likes
 
 CURR_USER_KEY = "curr_user"
 
@@ -84,7 +84,7 @@ def signup():
 
         do_login(user)
 
-        return redirect("/")
+        return redirect("/home")
 
     else:
         return render_template("users/signup.html", form=form)
@@ -102,7 +102,7 @@ def login():
         if user:
             do_login(user)
             flash(f"Hello, {user.username}!", "success")
-            return redirect("/")
+            return redirect("/home")
 
         flash("Invalid credentials.", "danger")
 
@@ -164,7 +164,7 @@ def show_following(user_id):
 
     if not g.user:
         flash("Access unauthorized.", "danger")
-        return redirect("/")
+        return redirect("/home")
 
     user = User.query.get_or_404(user_id)
     return render_template("users/following.html", user=user)
@@ -176,10 +176,24 @@ def users_followers(user_id):
 
     if not g.user:
         flash("Access unauthorized.", "danger")
-        return redirect("/")
+        return redirect("/home")
 
     user = User.query.get_or_404(user_id)
     return render_template("users/followers.html", user=user)
+
+
+@app.route('/users/<int:user_id>/likes')
+def users_likes(user_id):
+    """Show users liked messages"""
+
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/home")
+
+    user = User.query.get_or_404(user_id)
+    messages = user.likes
+
+    return render_template('/users/likes.html', user=user, messages=messages)
 
 
 @app.route("/users/follow/<int:follow_id>", methods=["POST"])
@@ -188,7 +202,7 @@ def add_follow(follow_id):
 
     if not g.user:
         flash("Access unauthorized.", "danger")
-        return redirect("/")
+        return redirect("/home")
 
     followed_user = User.query.get_or_404(follow_id)
     g.user.following.append(followed_user)
@@ -203,7 +217,7 @@ def stop_following(follow_id):
 
     if not g.user:
         flash("Access unauthorized.", "danger")
-        return redirect("/")
+        return redirect("/home")
 
     followed_user = User.query.get(follow_id)
     g.user.following.remove(followed_user)
@@ -246,7 +260,7 @@ def delete_user():
 
     if not g.user:
         flash("Access unauthorized.", "danger")
-        return redirect("/")
+        return redirect("/home")
 
     do_logout()
 
@@ -254,6 +268,33 @@ def delete_user():
     db.session.commit()
 
     return redirect("/signup")
+
+
+@app.route('/users/add_like/<int:msg_id>', methods=['GET', 'POST'])
+def add_like(msg_id):
+    """Like a message"""
+
+    if not g.user:
+        flash('You must be logged in to like messages!', 'danger')
+        return redirect('/login')
+    else:
+        like = Likes(user_id=g.user.id, message_id=msg_id)
+        db.session.add(like)
+        db.session.commit()
+
+        return redirect('/')
+
+
+@app.route('/users/del_like/<int:message_id>', methods=['GET', 'POST'])
+def del_like(message_id):
+    """Remove a liked message"""
+
+    like = Likes.query.filter_by(
+        user_id=g.user.id, message_id=message_id).one()
+    db.session.delete(like)
+    db.session.commit()
+
+    return redirect('/')
 
 
 ##############################################################################
@@ -269,7 +310,7 @@ def messages_add():
 
     if not g.user:
         flash("Access unauthorized.", "danger")
-        return redirect("/")
+        return redirect("/home")
 
     form = MessageForm()
 
@@ -297,7 +338,7 @@ def messages_destroy(message_id):
 
     if not g.user:
         flash("Access unauthorized.", "danger")
-        return redirect("/")
+        return redirect("/home")
 
     msg = Message.query.get(message_id)
     db.session.delete(msg)
@@ -306,29 +347,42 @@ def messages_destroy(message_id):
     return redirect(f"/users/{g.user.id}")
 
 
+def get_followed_messages():
+    """Query messages only by followed users and order by most recent"""
+
+    messages = []
+
+    for user in g.user.following:
+        messages.append(Message.query.filter_by(user_id=user.id).order_by(
+            Message.timestamp.desc()).limit(100).all())
+
+    return [msg for sm in messages for msg in sm]
+
+
 ##############################################################################
 # Homepage and error pages
 
+@app.route('/')
+def red_to_home():
+    return redirect('/home')
 
-@app.route("/")
+
+@app.route("/home")
 def homepage():
     """Show homepage:
 
     - anon users: no messages
     - logged in: 100 most recent messages of followed_users
     """
+    messages = []
 
-    if g.user:
-        messages = Message.query.order_by(
-            Message.timestamp.desc()).limit(100).all()
-
-        followed_msgs = [
-            msg for msg in messages if msg.user in g.user.following]
-
-        return render_template("home.html", messages=followed_msgs)
+    if not g.user:
+        return render_template("home-anon.html")
 
     else:
-        return render_template("home-anon.html")
+        messages = get_followed_messages()
+
+        return render_template("home.html", messages=messages)
 
 
 ##############################################################################
