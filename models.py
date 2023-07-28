@@ -122,18 +122,20 @@ class User(db.Model):
 
         Hashes password and adds user to system.
         """
+        if len(password) >= 6:
+            hashed_pwd = bcrypt.generate_password_hash(password).decode("UTF-8")
 
-        hashed_pwd = bcrypt.generate_password_hash(password).decode("UTF-8")
+            user = User(
+                username=username,
+                email=email,
+                password=hashed_pwd,
+                image_url=image_url,
+            )
 
-        user = User(
-            username=username,
-            email=email,
-            password=hashed_pwd,
-            image_url=image_url,
-        )
-
-        db.session.add(user)
-        return user
+            db.session.add(user)
+            return user
+        else:
+            raise ValueError("Password must be at least 6 characters long!")
 
     @classmethod
     def authenticate(cls, username, password):
