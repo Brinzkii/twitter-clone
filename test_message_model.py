@@ -2,7 +2,7 @@
 
 # run these tests like:
 #
-#    python -m unittest test_user_model.py
+#    python -m unittest test_message_model.py
 
 
 import os
@@ -32,3 +32,38 @@ with app.app_context():
 
 class MessageModelTestCase(TestCase):
     """Test model for messages."""
+
+    def setUp(self):
+        """Create test client, clear existing sample data."""
+
+        with app.app_context():
+            User.query.delete()
+            Message.query.delete()
+            Follows.query.delete()
+
+            db.session.commit()
+
+            self.client = app.test_client()
+
+    def test_message_model(self):
+        """Test basic model"""
+
+        with app.app_context():
+            u = User.signup(
+                email="test1@test.com",
+                username="testuser1",
+                password="HASHED_PASSWORD",
+                image_url="",
+            )
+
+            db.session.commit()
+
+            msg = Message(user_id=u.id, text="test")
+
+            db.session.add(msg)
+            db.session.commit()
+
+            self.assertEqual(Message.query.first(), msg)
+            self.assertEqual(msg.user_id, u.id)
+            self.assertEqual(msg.user, u)
+            self.assertEqual(Message.query.filter_by(text="test").first(), msg)
