@@ -182,7 +182,7 @@ def users_followers(user_id):
     return render_template("users/followers.html", user=user)
 
 
-@app.route('/users/<int:user_id>/likes')
+@app.route("/users/<int:user_id>/likes")
 def users_likes(user_id):
     """Show users liked messages"""
 
@@ -193,7 +193,7 @@ def users_likes(user_id):
     user = User.query.get_or_404(user_id)
     messages = user.likes
 
-    return render_template('/users/likes.html', user=user, messages=messages)
+    return render_template("/users/likes.html", user=user, messages=messages)
 
 
 @app.route("/users/follow/<int:follow_id>", methods=["POST"])
@@ -270,31 +270,30 @@ def delete_user():
     return redirect("/signup")
 
 
-@app.route('/users/add_like/<int:msg_id>', methods=['GET', 'POST'])
+@app.route("/users/add_like/<int:msg_id>", methods=["GET", "POST"])
 def add_like(msg_id):
     """Like a message"""
 
     if not g.user:
-        flash('You must be logged in to like messages!', 'danger')
-        return redirect('/login')
+        flash("You must be logged in to like messages!", "danger")
+        return redirect("/login")
     else:
         like = Likes(user_id=g.user.id, message_id=msg_id)
         db.session.add(like)
         db.session.commit()
 
-        return redirect('/')
+        return redirect("/")
 
 
-@app.route('/users/del_like/<int:message_id>', methods=['GET', 'POST'])
+@app.route("/users/del_like/<int:message_id>", methods=["GET", "POST"])
 def del_like(message_id):
     """Remove a liked message"""
 
-    like = Likes.query.filter_by(
-        user_id=g.user.id, message_id=message_id).one()
+    like = Likes.query.filter_by(user_id=g.user.id, message_id=message_id).one()
     db.session.delete(like)
     db.session.commit()
 
-    return redirect('/')
+    return redirect("/")
 
 
 ##############################################################################
@@ -353,18 +352,26 @@ def get_followed_messages():
     messages = []
 
     for user in g.user.following:
-        messages.append(Message.query.filter_by(user_id=user.id).order_by(
-            Message.timestamp.desc()).limit(100).all())
+        messages.append(Message.query.filter_by(user_id=user.id).limit(100).all())
 
-    return [msg for sm in messages for msg in sm]
+    followed_msgs = [msg for usr in messages for msg in usr]
+    followed_msgs.sort(key=order_messages, reverse=True)
+    return followed_msgs
+
+
+def order_messages(msg):
+    """Returns msg timestamp for use in sorting"""
+
+    return msg.timestamp
 
 
 ##############################################################################
 # Homepage and error pages
 
-@app.route('/')
+
+@app.route("/")
 def red_to_home():
-    return redirect('/home')
+    return redirect("/home")
 
 
 @app.route("/home")
