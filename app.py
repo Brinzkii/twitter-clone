@@ -222,10 +222,6 @@ def profile():
         flash("You must be logged in to edit a profile.", "danger")
         return redirect("/login")
 
-    # if User.authenticate(g.user.username, form.password.data) == False:
-    #     flash("Incorrect password, your changes were not saved.", "warning")
-    #     return render_template("/users/edit.html", form=form)
-
     if form.validate_on_submit():
         if User.authenticate(g.user.username, form.password.data):
             g.user.username = form.username.data
@@ -323,9 +319,13 @@ def homepage():
     """
 
     if g.user:
-        messages = Message.query.order_by(Message.timestamp.desc()).limit(100).all()
+        messages = Message.query.order_by(
+            Message.timestamp.desc()).limit(100).all()
 
-        return render_template("home.html", messages=messages)
+        followed_msgs = [
+            msg for msg in messages if msg.user in g.user.following]
+
+        return render_template("home.html", messages=followed_msgs)
 
     else:
         return render_template("home-anon.html")
